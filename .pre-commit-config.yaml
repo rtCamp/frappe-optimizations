@@ -1,7 +1,6 @@
-exclude: 'node_modules|.git'
+exclude: "node_modules|.git"
 default_stages: [pre-commit]
 fail_fast: false
-
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -16,6 +15,7 @@ repos:
       - id: check-toml
       - id: check-yaml
       - id: debug-statements
+      - id: end-of-file-fixer
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.1
@@ -30,40 +30,68 @@ repos:
       - id: ruff-format
         name: "Run ruff formatter"
 
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v2.7.1
-    hooks:
-      - id: prettier
-        types_or: [javascript, vue, scss]
-        # Ignore any files that might contain jinja / bundles
-        exclude: |
-            (?x)^(
-                frappe_optimizations/public/dist/.*|
-                .*node_modules.*|
-                .*boilerplate.*|
-                frappe_optimizations/templates/includes/.*|
-                frappe_optimizations/public/js/lib/.*
-            )$
-
-
   - repo: https://github.com/pre-commit/mirrors-eslint
     rev: v8.44.0
     hooks:
       - id: eslint
         types_or: [javascript]
-        args: ['--quiet']
+        args: ["--quiet"]
         # Ignore any files that might contain jinja / bundles
         exclude: |
+          (?x)^(
+              frappe_optimizations/public/dist/.*|
+              cypress/.*|
+              .*node_modules.*|
+              .*boilerplate.*|
+              frappe_optimizations/templates/includes/.*|
+              frappe_optimizations/public/js/lib/.*
+          )$
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v2.7.1
+    hooks:
+      - id: prettier
+        name: "JS/TS Formatter"
+        language: node
+        files: ^.*\.(jsx|tsx|ts|js)$
+        types: [file]
+        exclude: |
             (?x)^(
-                frappe_optimizations/public/dist/.*|
-                cypress/.*|
-                .*node_modules.*|
-                .*boilerplate.*|
-                frappe_optimizations/templates/includes/.*|
-                frappe_optimizations/public/js/lib/.*
+              frappe_optimizations/public/dist/.*|
+              .*node_modules.*|
+              .*boilerplate.*|
+              frappe_optimizations/templates/includes/.*|
+              frappe_optimizations/public/js/lib/.*
             )$
 
+  - repo: local
+    hooks:
+      - id: clone-local-repo
+        name: clone-local-repo
+        entry: bash -c 'TARGET_DIR=".frappe-semgrep" && [ ! -d "$TARGET_DIR" ] && git clone "https://github.com/frappe/semgrep-rules" "$TARGET_DIR" || true'
+        language: system
+        always_run: true
+
+  - repo: local
+    hooks:
+      - id: eslint-react
+        name: "ESlint React"
+        entry: bash -c 'cd frontend && npm run lint:precommit'
+        language: system
+        files: ^frontend/.*\.(jsx|tsx|ts)$
+        types: [file]
+        pass_filenames: true
+        exclude: |
+            (?x)^(
+                .*node_modules.*
+            )$
+
+  - repo: https://github.com/semgrep/pre-commit
+    rev: 'v1.91.0'
+    hooks:
+      - id: semgrep-ci
+        args: ['--config', './.frappe-semgrep/rules', '--config','r/python.lang.correctness','--error', '--skip-unknown-extensions', '--metrics','off']
 ci:
-    autoupdate_schedule: weekly
-    skip: []
-    submodules: false
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false
