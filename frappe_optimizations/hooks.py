@@ -132,13 +132,17 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	# "*": {
+	# 	"on_update": "method",
+	# 	"on_cancel": "method",
+	# 	"on_trash": "method"
+	# }
+	"Pricing Rule": {
+		"after_insert": "frappe_optimizations.monkey_patches.get_pricing_rules.clear_pricing_rule_cache",
+		"on_delete": "frappe_optimizations.monkey_patches.get_pricing_rules.clear_pricing_rule_cache",
+	}
+}
 
 # Scheduled Tasks
 # ---------------
