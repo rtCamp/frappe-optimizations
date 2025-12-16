@@ -1,56 +1,78 @@
-import frappe
-
-
 def update_coupon_code_count(coupon_name, transaction_type):
-	max_retries = 3
-	for attempt in range(max_retries):
-		try:
-			if transaction_type == "used":
-				frappe.db.sql(
-					"""
-                    UPDATE `tabCoupon Code`
-                    SET used = used + 1
-                    WHERE name = %s
-                    AND (maximum_use IS NULL OR maximum_use = 0 OR used < maximum_use)
-                """,
-					(coupon_name,),
-				)
-				affected_rows = frappe.db.sql("""SELECT ROW_COUNT();""")[0][0]
+	import frappe
 
-				if not affected_rows:
-					frappe.throw(
-						frappe._("Coupon code is no longer available or has reached its usage limit")
-					)
+	if transaction_type == "used":
+		cache_key = f"coupon_code_count:{coupon_name}"
+		lock_key = f"coupon_code_lock:{coupon_name}"
+		BATCH_SIZE = 100
+		coupon_data = frappe.cache.hget(cache_key, "data")
 
-			elif transaction_type == "cancelled":
-				frappe.db.sql(
-					"""
-                    UPDATE `tabCoupon Code`
-                    SET used = GREATEST(used - 1, 0), modified = %s
-                    WHERE name = %s AND used > 0
-                """,
-					(frappe.utils.now(), coupon_name),
-				)
+		if not coupon_data:
+			coupon_data = frappe.db.get_value(
+				"Coupon Code",
+				coupon_name,
+				["used", "maximum_use"],
+				as_dict=True,
+			)
+			if coupon_data:
+				frappe.cache.hset(cache_key, "data", coupon_data)
+				frappe.cache.hset(cache_key, "pending_count", 0)
+			else:
+				frappe.throw(frappe._("Invalid coupon code"))
 
-			# Success - break out of retry loop
-			break
+		new_pending_count = frappe.cache.hincrby(cache_key, "pending_count", 1)
 
-		except frappe.QueryDeadlockError:
-			if attempt == max_retries - 1:
-				# Last attempt failed, re-raise the error
-				raise
+		frappe.db.after_rollback.add(lambda: frappe.cache.hincrby(cache_key, "pending_count", -1))
 
-			import random
-			import time
+		used = coupon_data.get("used") or 0
+		total_used = used + new_pending_count
+		maximum_use = coupon_data.get("maximum_use") or 0
 
-			# Random backoff to avoid concurrent retries colliding
-			base_delay = 0.05  # 50ms base
-			jitter = random.uniform(0.01, 0.5)  # 10ms to 500ms random jitter
-			exponential_backoff = base_delay * (2**attempt)  # Exponential: 50ms, 100ms, 200ms
-			total_delay = exponential_backoff + jitter + random.random() * 0.1
+		if maximum_use and total_used > maximum_use:
+			frappe.cache.hincrby(cache_key, "pending_count", -1)
+			frappe.throw(frappe._("Coupon code is no longer available or has reached its usage limit"))
 
-			time.sleep(total_delay)
-			continue
+		lock_acquired = frappe.cache.set_value(lock_key, "1", nx=True, ex=5)
+
+		if new_pending_count >= BATCH_SIZE and lock_acquired:
+			flush_count = new_pending_count
+
+			old_coupon_data = coupon_data.copy()
+
+			frappe.cache.hincrby(cache_key, "pending_count", -flush_count)
+
+			coupon_data["used"] = used + flush_count
+			frappe.cache.hset(cache_key, "data", coupon_data)
+
+			def rollback_flush():
+				frappe.cache.hincrby(cache_key, "pending_count", flush_count)
+				frappe.cache.hset(cache_key, "data", old_coupon_data)
+
+			frappe.db.after_rollback.add(rollback_flush)
+
+			frappe.db.sql(
+				"""
+				UPDATE `tabCoupon Code`
+				SET used = used + %s, modified = %s
+				WHERE name = %s
+				""",
+				(flush_count, frappe.utils.now(), coupon_name),
+			)
+
+			print(f"Flushed {flush_count} pending updates for coupon {coupon_name}")
+
+		if lock_acquired:
+			frappe.cache.hdel(lock_key, "1")
+
+	elif transaction_type == "cancelled":
+		frappe.db.sql(
+			"""
+			UPDATE `tabCoupon Code`
+			SET used = GREATEST(used - 1, 0), modified = %s
+			WHERE name = %s AND used > 0
+			""",
+			(frappe.utils.now(), coupon_name),
+		)
 
 
 def update_coupon_code_count_monkey_patch():
