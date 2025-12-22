@@ -132,13 +132,17 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	# "*": {
+	# 	"on_update": "method",
+	# 	"on_cancel": "method",
+	# 	"on_trash": "method"
+	# }
+	"Pricing Rule": {
+		"after_insert": "frappe_optimizations.monkey_patches.get_pricing_rules.clear_pricing_rule_cache",
+		"on_delete": "frappe_optimizations.monkey_patches.get_pricing_rules.clear_pricing_rule_cache",
+	}
+}
 
 # Scheduled Tasks
 # ---------------
@@ -160,6 +164,14 @@ app_license = "mit"
 # 		"frappe_optimizations.tasks.monthly"
 # 	],
 # }
+
+# DocType Class
+# ---------------
+# Override standard doctype classes
+
+override_doctype_class = {
+	"Subscription": "frappe_optimizations.override.subscription.OptimizeSubscriptionOverride",
+}
 
 # Testing
 # -------
@@ -249,4 +261,3 @@ app_license = "mit"
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-
