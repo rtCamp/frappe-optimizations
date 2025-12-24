@@ -58,3 +58,8 @@ def update_coupon_code_count_monkey_patch():
 	from erpnext.accounts.doctype.pricing_rule import utils
 
 	utils.update_coupon_code_count = update_coupon_code_count  # nosemgrep
+
+	# nosemgrep
+	from erpnext.accounts.doctype.sales_invoice import sales_invoice
+
+	sales_invoice.update_coupon_code_count = update_coupon_code_count  # nosemgrep
