@@ -1,4 +1,4 @@
-BOOKKEEPER_HOST = "http://localhost:8092"
+BOOKKEEPER_HOST = "http://book-keeper:8000"
 API_PREFIX = "/api/book-keeper/v1"
 TENANT_ID = "twophasetenant"
 HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
@@ -12,6 +12,7 @@ def update_coupon_code_count(coupon_name, transaction_type):
 	import uuid
 	from datetime import date
 
+	import frappe
 	import requests
 
 	COUPON_DEBIT_ACCOUNT = f"coupon_used_{coupon_name}"
@@ -39,6 +40,20 @@ def update_coupon_code_count(coupon_name, transaction_type):
 		)
 		response.raise_for_status()
 		journal_id = response.json()["journal_id"]
+
+		# If the surrounding DB transaction rolls back (invoice submit fails, etc),
+		# void the pending journal entry so coupon usage isn't counted.
+		def void_pending_journal_entry():
+			void_resp = requests.post(
+				f"{BOOKKEEPER_HOST}{API_PREFIX}/pending-journal-entries/{journal_id}/void",
+				json={"tenant_id": TENANT_ID},
+				headers=HEADERS,
+				timeout=5,
+			)
+			void_resp.raise_for_status()
+			print(f"[BOOK-KEEPER] Voided pending journal entry {journal_id} for coupon {coupon_name}")
+
+		frappe.db.after_rollback.add(void_pending_journal_entry)
 
 		commit_response = requests.post(
 			f"{BOOKKEEPER_HOST}{API_PREFIX}/pending-journal-entries/{journal_id}/commit",
@@ -223,3 +238,8 @@ def update_coupon_code_count_monkey_patch():
 	from erpnext.accounts.doctype.pricing_rule import utils
 
 	utils.update_coupon_code_count = update_coupon_code_count  # nosemgrep
+
+	# nosemgrep
+	from erpnext.accounts.doctype.sales_invoice import sales_invoice
+
+	sales_invoice.update_coupon_code_count = update_coupon_code_count  # nosemgrep
