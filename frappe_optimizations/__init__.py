@@ -7,8 +7,10 @@ def monkey_patch():
 	update_coupon_code_count_monkey_patch()
 
 	from .monkey_patches.get_pricing_rules import get_pricing_rules_monkey_patch
+	from .monkey_patches.payment_entry_get_currency_data import get_currency_data_monkey_patch
 
 	get_pricing_rules_monkey_patch()
+	get_currency_data_monkey_patch()
 
 
 try:

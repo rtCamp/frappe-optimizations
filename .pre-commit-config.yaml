@@ -90,6 +90,8 @@ repos:
     rev: 'v1.91.0'
     hooks:
       - id: semgrep-ci
+        additional_dependencies:
+        - setuptools>=65
         args: ['--config', './.frappe-semgrep/rules', '--config','r/python.lang.correctness','--error', '--skip-unknown-extensions', '--metrics','off']
 ci:
   autoupdate_schedule: weekly
