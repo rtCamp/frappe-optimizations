@@ -16,6 +16,10 @@ def monkey_patch():
 
 	operator_map_func_in_monkey_patch()
 
+	from .monkey_patches.choose_top_doctypes import choose_top_doctypes_monkey_patch
+
+	choose_top_doctypes_monkey_patch()
+
 
 try:
 	monkey_patch()
