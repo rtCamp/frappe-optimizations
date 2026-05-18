@@ -2,8 +2,15 @@ import frappe
 from erpnext.accounts.doctype.subscription.subscription import Subscription
 from frappe.model.document import Document
 
+if "frappe_affiliate" in frappe.get_installed_apps():
+	from frappe_affiliate.override.subscription_override import SubscriptionOverride
 
-class OptimizeSubscriptionOverride(Subscription):
+	BaseSubscription = SubscriptionOverride
+else:
+	BaseSubscription = Subscription
+
+
+class OptimizeSubscriptionOverride(BaseSubscription):
 	@property
 	def current_invoice(self) -> Document | None:
 		"""
